@@ -3,13 +3,33 @@
 require_relative 'base_processor'
 
 module PrometheusExporterExt
+  # Processor format input data and send metrics on call.
+  # Use when you need to send metrics as result of some action.
+  # @example
+  #   class MyProcessor < PrometheusExporterExt::InlineProcessor
+  #     self.type = 'my'
+  #     self.logger = Rails.logger
+  #
+  #     def collect(data)
+  #       [
+  #         format_metric(
+  #           my_gauge: data[:total_count],
+  #           my_counter: 1,
+  #           labels: { my_node: data[:node_name] }
+  #         )
+  #       ]
+  #     end
+  #   end
+  #
+  #   data = MyApi.get_my_data
+  #   MyProcessor.process(data, labels: { my_host: 'example.com' })
   class InlineProcessor < BaseProcessor
     class << self
-      # @param data
+      # @param args [Array]
       # @param labels [Hash]
       # @param client [PrometheusExporter::Client,nil] default PrometheusExporter::Client.default
-      def process(data, labels: {}, client: nil)
-        metrics = new(labels).collect(data)
+      def process(*args, labels: {}, client: nil)
+        metrics = new(labels).collect(*args)
         client ||= PrometheusExporter::Client.default
 
         Thread.new do
@@ -22,8 +42,7 @@ module PrometheusExporterExt
       end
     end
 
-    # @param data
-    def collect(data)
+    def collect(*args)
       raise NotImplementedError
     end
   end

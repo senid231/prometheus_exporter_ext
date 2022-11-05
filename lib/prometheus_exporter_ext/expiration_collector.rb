@@ -3,23 +3,25 @@
 require_relative 'base_collector'
 
 module PrometheusExporterExt
-  # Collector that caches all received data for some time.
-  # When prometheus exporter receives new metrics from the client via POST /send-metrics
+  # Collector that caches all received data for defined interval
+  # and gives main prometheus process only not expired metrics.
+  # When main prometheus process fetch metrics via GET /metrics
   # we clear metrics that was added earlier than :max_metric_age seconds ago.
+  # Use it when some metrics can stop coming from the client
+  # and you want to remove them from main prometheus process.
   # In most cases it is used with PrometheusExporterExt::PeriodicProcessor on client side.
   # @example
-  #   class MyCollector < PrometheusExporterExt::LifecycleCollector
+  #   class MyCollector < PrometheusExporterExt::ExpirationCollector
   #     self.type = 'my'
   #
-  #     # By default value is 25
-  #     # Normally this value should be little less than client send interval,
-  #     # so when new metrics received old one will be already expired.
-  #     # Use it when you need to clear all old metrics when new metrics received.
-  #     self.max_metric_age = 25
+  #     # By default value is 35.
+  #     # Normally this value should be little greater than client send frequency,
+  #     # so old data will be cleared after new one received.
+  #     self.max_metric_age = 35
   #
   #     define_metric_gauge :my_gauge, 'my_gauge desc'
   #   end
-  class LifecycleCollector < BaseCollector
+  class ExpirationCollector < BaseCollector
     class << self
       attr_accessor :max_metric_age
 
@@ -27,7 +29,7 @@ module PrometheusExporterExt
 
       def inherited(subclass)
         super
-        subclass.max_metric_age = max_metric_age || 25
+        subclass.max_metric_age = max_metric_age || 35
       end
     end
 
@@ -39,6 +41,7 @@ module PrometheusExporterExt
     end
 
     def metrics
+      clear_expired_data
       return [] if @data.empty?
 
       @observers.each_value(&:reset!)
@@ -52,7 +55,6 @@ module PrometheusExporterExt
     end
 
     def collect(obj)
-      clear_expired_data
       obj['created_at'] = monotonic_now
       @data << obj
     end

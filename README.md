@@ -1,14 +1,19 @@
 # PrometheusExporterExt
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/prometheus_exporter_ext`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+Extended processors and collectors for [prometheus_exporter](https://github.com/discourse/prometheus_exporter).  
+This gem based on prometheus_exporter gem, so please read it's `README` first to understand how it works.
 
 ## Installation
 
 Install the gem and add to the application's Gemfile by executing:
 
-    $ bundle add prometheus_exporter_ext
+    $ bundle add prometheus_exporter_ext -r false
+
+Or add directly to the Gemfile
+
+```ruby
+gem 'prometheus_exporter_ext', `~> 0.1`, require: false
+```
 
 If bundler is not being used to manage dependencies, install the gem by executing:
 
@@ -16,17 +21,248 @@ If bundler is not being used to manage dependencies, install the gem by executin
 
 ## Usage
 
-TODO: Write usage instructions here
+### Prometheus general information
+
+Prometheus is system that stores metrics data as time-series, name, value, labels set.
+It used to provide monitoring, charts and many more.
+see [Prometheus overview](https://prometheus.io/docs/introduction/overview/) for additional details.
+
+Prometheus Metric Types
+* Gauge - new value for same name/labels replace old value.
+* Counter - new value for same name/labels increments old value.
+* Summary
+* Histogram
+see [Metric types](https://prometheus.io/docs/concepts/metric_types/) for additional details.
+
+How prometheus Gather metrics?  
+Prometheus has list of endpoints (http://host:port) and each scrapping interval (default 5 sec)
+it fetches metrics for those endpoints via **GET /metrics**.
+Prometheus stores received metrics with the time-series data when it was received.
+
+What is Prometheus Exported?
+It's some kind of a proxy between Prometheus and our applications.  
+Instead of responding **GET /metrics** on each application, we push metrics data to the prometheus exporter.
+Client should send data to the exporter in client-oriented format - Hash.
+Prometheus exporter responsible to receive and convert metrics data into metrics text in prometheus format.  
+Also prometheus exporter responsible to forget some metrics when it needed, 
+because prometheus exporter does not handle time-series.
+
+To gather metrics for your need we have several built-in collectors and processors that simplifies common tasks.
+
+### Processors
+
+Processors are used to gather metrics data on client side.  
+Each metrics data in the context of the client is a simple Hash with keys and values.  
+Each metrics data must have a `type` key, because exporter will decide 
+which collector should handle data by `type` value.
+
+Below you can find most common types of **Processor** that covers most of the cases.
+
+#### PrometheusExporterExt::InlineProcessor
+`PrometheusExporterExt::InlineProcessor` format input data and send metrics on call.
+Metrics are send in a thread.  
+Use when you need to send metrics as result of some action.
+
+```ruby
+require 'prometheus_exporter_ext/inline_processor'
+
+class MyProcessor < PrometheusExporterExt::InlineProcessor
+  self.type = 'my' # required
+  self.logger = Rails.logger # can be omitted
+
+  # you can add on_exception callback to send events into error notifications system 
+  on_exception do |error|
+    ErrorNotificationSender.capture_error(error, { processor: 'MyProcessor' })
+  end
+
+  def collect(data)
+    [
+      format_metric(
+        my_gauge: data[:total_count],
+        my_counter: 1,
+        labels: { my_node: data[:node_name] }
+      )
+    ]
+  end
+end
+
+data = MyApi.get_my_data # => { total_count: 123, node_name: 'example' }
+# below command will send metrics to the prometheus exporter via PrometheusExporter::Client.default
+# Collector will receive: 
+# { 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 'labels' => { 'my_node' => 'example' } }
+MyProcessor.process(data)
+# You can provide additional labels that will be added only to this data.
+# Collector will receive: 
+# { 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 
+#   'labels' => { 'my_node' => 'example', 'my_host' => 'example.com' } }
+MyProcessor.process(data, labels: { my_host: 'example.com' })
+# Also you can override client
+MyProcessor.process(data, client: MyPrometheusClient.instance)
+```
+
+#### PrometheusExporterExt::PeriodicProcessor
+`PrometheusExporterExt::PeriodicProcessor` sends metrics to prometheus exporter with given frequency.  
+Creates a thread that sends metrics periodically with given frequency, default 30.  
+Use when you need to monitor state of something.  
+Normally used with `PrometheusExporterExt::ExpirationCollector` or `PrometheusExporterExt::LifecycleCollector`.
+```ruby
+require 'prometheus_exporter_ext/periodic_processor'
+
+class MyProcessor < PrometheusExporterExt::PeriodicProcessor
+  self.type = 'my' # required
+  self.logger = Rails.logger # can be omitted
+
+  # you can add on_exception callback to send events into error notifications system.
+  after_thread_start do
+    MyDB.disconnect
+  end
+
+  # will be called when metrics sending raises exception
+  on_exception do |error|
+    ErrorNotificationSender.capture_error(error, { processor: 'MyProcessor' })
+  end
+
+  def collect
+    MyDB.with_connection do |conn|
+      data = conn.get_my_data # => { total_count: 123, node_name: 'example' }
+      [
+        format_metric(
+          my_gauge: data[:total_count],
+          my_counter: 1,
+          labels: { my_node: data[:node_name] }
+        )
+      ]
+    end
+  end
+end
+
+# Collector will receive following each 30 seconds: 
+# { 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 'labels' => { 'my_node' => 'example' } }
+MyProcessor.start
+# You can change send interval for the processor
+MyProcessor.start(frequency: 60)
+# Also you can provide additional labels that will be send with all metrics data.
+# Collector will receive: 
+# { 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 
+#   'labels' => { 'my_node' => 'example', 'my_host' => 'example.com' } }
+MyProcessor.start(labels: { my_host: 'example.com' })
+```
+
+#### PrometheusExporterExt::BaseProcessor
+When you need some custom processor behaviour that does not feet any of above examples
+you can inherit `PrometheusExporterExt::BaseProcessor`.
+```ruby
+require 'prometheus_exporter_ext/base_processor'
+
+class MyProcessor < PrometheusExporterExt::BaseProcessor
+  self.type = 'my'
+  
+  def collect
+    data = MyApi.get_my_data # => { total_count: 123, node_name: 'example' }
+    [
+      format_metric(
+        my_gauge: data[:total_count],
+        my_counter: 1,
+        labels: { my_node: data[:node_name] }
+      )
+    ]
+  end
+end
+
+# [{ 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 'labels' => { 'my_node' => 'example' } }]
+metrics_data = MyProcessor.new.collect
+# You can send metrics data like this:
+metrics_data.each do |metric|
+  PrometheusExporter::Client.default.send_json(metric)
+end
+```
+
+### Collectors
+
+On boot exporter create and store collector instances of each class that we define.
+Collectors instance receive metrics data that have same `type` value.
+
+Below you can see common use cases of the collector.
+
+#### PrometheusExporterExt::BaseCollector
+`PrometheusExporterExt::BaseCollector` caches all received data during exporter process is running.
+It will store keys that are registered via `define_metric_*` methods with provided `metric_labels`, and ignore extra keys.
+
+```ruby
+require 'prometheus_exporter_ext/base_collector'
+
+class MyCollector < PrometheusExporterExt::BaseCollector
+  self.type = 'my'
+  
+  define_metric_counter :my_counter, 'my_counter desc'
+  define_metric_gauge :my_gauge, 'my_gauge desc'
+  define_metric_histogram :my_histogram_1, 'my_histogram_1 desc'
+  define_metric_histogram :my_histogram_2, 'my_histogram_2 desc', buckets: [0.01, 0.1, 0.5, 1, 10.0]
+  define_metric_summary :my_summary_1, 'my_summary_1 desc'
+  define_metric_summary :my_summary_2, 'my_summary_2 desc', quantiles: [0.99, 0.9, 0.5, 0.1, 0.01]
+end
+```
+
+#### PrometheusExporterExt::ExpirationCollector
+`PrometheusExporterExt::ExpirationCollector` that caches all received data for defined interval
+and gives main prometheus process only not expired metrics.  
+When main prometheus process fetch metrics via GET /metrics
+we clear metrics that was added earlier than `:max_metric_age` seconds ago.  
+Use it when some metrics can stop coming from the client
+and you want to remove them from main prometheus process.  
+In most cases it is used with `PrometheusExporterExt::PeriodicProcessor` on client side.
+
+```ruby
+require 'prometheus_exporter_ext/expiration_collector'
+
+class MyCollector < PrometheusExporterExt::ExpirationCollector
+  self.type = 'my'
+  
+  # By default value is 35.
+  # Normally this value should be little greater than client send frequency,
+  # so old data will be cleared after new one received.
+  self.max_metric_age = 35
+  
+  define_metric_gauge :my_gauge, 'my_gauge desc'
+end
+```
+
+#### PrometheusExporterExt::LifecycleCollector
+`PrometheusExporterExt::LifecycleCollector` that caches all received data for some time.  
+When prometheus exporter receives new metrics from the client via `POST /send-metrics`
+we clear metrics that was added earlier than `:max_metric_age` seconds ago.  
+In most cases it is used with `PrometheusExporterExt::PeriodicProcessor` on client side.
+
+```ruby
+require 'prometheus_exporter_ext/lifecycle_collector'
+
+class MyCollector < PrometheusExporterExt::LifecycleCollector
+  self.type = 'my'
+  
+  # By default value is 25
+  # Normally this value should be little less than client send interval,
+  # so when new metrics received old one will be already expired.
+  # Use it when you need to clear all old metrics when new metrics received.
+  self.max_metric_age = 25
+  
+  define_metric_gauge :my_gauge, 'my_gauge desc'
+end
+```
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can
+also run `bin/console` for an interactive prompt that will allow you to experiment.
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the
+version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version,
+push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/prometheus_exporter_ext. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/prometheus_exporter_ext/blob/master/CODE_OF_CONDUCT.md).
+Bug reports and pull requests are welcome on GitHub at https://github.com/senid231/prometheus_exporter_ext. This project
+is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to
+the [code of conduct](https://github.com/senid231/prometheus_exporter_ext/blob/master/CODE_OF_CONDUCT.md).
 
 ## License
 
@@ -34,4 +270,6 @@ The gem is available as open source under the terms of the [MIT License](https:/
 
 ## Code of Conduct
 
-Everyone interacting in the PrometheusExporterExt project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/prometheus_exporter_ext/blob/master/CODE_OF_CONDUCT.md).
+Everyone interacting in the PrometheusExporterExt project's codebase, issue trackers, chat rooms and mailing lists is
+expected to follow
+the [code of conduct](https://github.com/senid231/prometheus_exporter_ext/blob/master/CODE_OF_CONDUCT.md).

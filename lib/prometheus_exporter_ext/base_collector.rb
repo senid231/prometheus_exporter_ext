@@ -4,11 +4,14 @@ require 'prometheus_exporter/metric'
 require 'prometheus_exporter/server/type_collector'
 
 module PrometheusExporterExt
+
   # Collector that caches all received data forever.
   # @example
   #   class MyCollector < PrometheusExporterExt::BaseCollector
+  #     self.type = 'my'
+  #
   #     define_metric_counter :my_counter, 'my_counter desc'
-  #     define_metric_gauge :my_gauge, 'my_counter desc'
+  #     define_metric_gauge :my_gauge, 'my_gauge desc'
   #     define_metric_histogram :my_histogram_1, 'my_histogram_1 desc'
   #     define_metric_histogram :my_histogram_2, 'my_histogram_2 desc', buckets: [0.01, 0.1, 0.5, 1, 10.0]
   #     define_metric_summary :my_summary_1, 'my_summary_1 desc'

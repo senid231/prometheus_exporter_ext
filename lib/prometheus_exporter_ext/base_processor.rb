@@ -1,6 +1,29 @@
 # frozen_string_literal: true
 
 module PrometheusExporterExt
+
+  # Base processor class.
+  # Use it when ancestors are not flexible enough for your needs.
+  # @example
+  #   class MyProcessor < PrometheusExporterExt::BaseProcessor
+  #     self.type = 'my'
+  #     self.logger = Rails.logger
+  #
+  #     def collect
+  #       data = MyApi.get_my_data
+  #       [
+  #         format_metric(
+  #           my_gauge: data[:total_count],
+  #           my_counter: 1,
+  #           labels: { my_node: data[:node_name] }
+  #         )
+  #       ]
+  #     end
+  #   end
+  #
+  #   MyProcessor.new.collect.each do |metric|
+  #     PrometheusExporter::Client.default.send_json(metric)
+  #   end
   class BaseProcessor
     class << self
       attr_accessor :logger, :type, :_on_exception

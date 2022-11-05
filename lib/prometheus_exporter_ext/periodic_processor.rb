@@ -4,6 +4,33 @@ require_relative 'base_processor'
 
 module PrometheusExporterExt
   # Processor that sends metrics to prometheus exporter with given frequency.
+  # Creates a thread that sends metrics periodically with given frequency, default 30.
+  # Use when you need to monitor state of something.
+  # Normally used with PrometheusExporterExt::ExpirationCollector
+  # or PrometheusExporterExt::LifecycleCollector.
+  # @example
+  #   class MyProcessor < PrometheusExporterExt::PeriodicProcessor
+  #     self.type = 'my'
+  #     self.logger = Rails.logger
+  #
+  #     # being run inside thread before loop starts.
+  #     after_thread_start do
+  #       MyConnection.disconnect
+  #     end
+  #
+  #     def collect
+  #       data = MyApi.get_my_data
+  #       [
+  #         format_metric(
+  #           my_gauge: data[:total_count],
+  #           my_counter: 1,
+  #           labels: { my_node: data[:node_name] }
+  #         )
+  #       ]
+  #     end
+  #   end
+  #
+  #   MyProcessor.start(labels: { my_host: 'example.com' })
   class PeriodicProcessor < BaseProcessor
     class << self
       attr_accessor :_after_thread_start
