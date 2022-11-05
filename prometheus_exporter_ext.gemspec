@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
 
   spec.summary = 'Prometheus Exporter extended processors and collectors'
   spec.description = spec.summary
-  spec.homepage = 'https://github.com/didww/prometheus_exporter_ext'
+  spec.homepage = 'https://github.com/senid231/prometheus_exporter_ext'
   spec.license = 'MIT'
   spec.required_ruby_version = '>= 2.7.6'
 
