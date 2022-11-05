@@ -7,7 +7,7 @@ This gem based on prometheus_exporter gem, so please read it's `README` first to
 
 Install the gem and add to the application's Gemfile by executing:
 
-    $ bundle add prometheus_exporter_ext -r false
+    $ bundle add prometheus_exporter_ext
 
 Or add directly to the Gemfile
 
