@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative 'base_processor'
-
 module PrometheusExporterExt
   # Processor format input data and send metrics on call.
   # Use when you need to send metrics as result of some action.
@@ -30,7 +28,8 @@ module PrometheusExporterExt
       # @param labels [Hash]
       # @param client [PrometheusExporter::Client,nil] default PrometheusExporter::Client.default
       def process(*args, labels: {}, client: nil)
-        metrics = new(labels).collect(*args)
+        processor = new(labels)
+        metrics = processor.collect(*args)
         client ||= PrometheusExporter::Client.default
 
         Thread.new do
@@ -38,7 +37,7 @@ module PrometheusExporterExt
         rescue StandardError => e
           warn "#{self.class} Failed To Collect Stats #{e.class} #{e.message}"
           logger&.error { "#{e.class} #{e.message} #{e.backtrace&.join("\n")}" }
-          run_on_exception(e)
+          processor.handle_exception(e)
         end
       end
     end

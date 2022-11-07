@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative 'base_processor'
-
 module PrometheusExporterExt
   # Processor that sends metrics to prometheus exporter with given frequency.
   # Creates a thread that sends metrics periodically with given frequency, default 30.
@@ -68,7 +66,7 @@ module PrometheusExporterExt
               rescue StandardError => e
                 warn "#{self.class} Failed To Collect Stats #{e.class} #{e.message}"
                 logger&.error { "#{e.class} #{e.message} #{e.backtrace&.join("\n")}" }
-                run_on_exception(e)
+                process_collector.handle_exception(e)
               end
               sleep frequency
             end

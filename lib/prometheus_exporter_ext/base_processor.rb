@@ -37,12 +37,13 @@ module PrometheusExporterExt
         _on_exception << block
       end
 
-      private
-
       # @param exception [Exception]
-      def run_on_exception(exception)
+      def handle_exception(exception)
         _on_exception.each { |cb| cb.call(exception) }
+        PrometheusExporterExt.config.handle_exception(exception, self)
       end
+
+      private
 
       def inherited(subclass)
         super
