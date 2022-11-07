@@ -49,6 +49,26 @@ because prometheus exporter does not handle time-series.
 
 To gather metrics for your need we have several built-in collectors and processors that simplifies common tasks.
 
+### Configuration
+
+```ruby
+PrometheusExporterExt.configure do |config|
+  config.enabled = ENV['PROMETHEUS_ENABLED']
+  config.host = ENV['PROMETHEUS_HOST']
+  config.port = ENV['PROMETHEUS_PORT']
+  config.default_labels = { node_name: ENV['NODE_NAME'] }
+
+  # you can add on_exception callback to send events into error notifications system 
+  on_exception do |error, processor|
+    ErrorNotificationSender.capture_error(error, { processor: processor.class.name })
+  end
+end
+
+if PrometheusExporterExt.enabled?
+ # ...
+end
+```
+
 ### Processors
 
 Processors are used to gather metrics data on client side.  
@@ -261,6 +281,180 @@ class MyCollector < PrometheusExporterExt::LifecycleCollector
   
   define_metric_gauge :my_gauge, 'my_gauge desc'
 end
+```
+
+## How to configure prometheus exporter client side on Rails
+
+For example we want to use `AppOnlineProcessor` on puma master to monitor whether application online or not.  
+And want to monitor `AppRamProcessor` on both puma master and it's workers.
+Also we have service `SomeService` that we want to monitor about errors, 
+every exception there should increment counter in `SomeServiceErrorProcessor`
+
+1. Place you processors into `lib/prometheus/`  
+`lib/prometheus/app_online_processor`
+```ruby
+module Prometheus
+  class AppOnlineProcessor < PrometheusExporterExt::PeriodicProcessor
+    self.type = 'app_online'
+    self.logger = Rails.logger
+    self.default_frequency = 60
+
+    def collect
+      [format_metric(online: 1, labels: { pid: Process.pid, version: ENV['APP_VERSION'] })]
+    end
+  end
+end
+```
+`lib/prometheus/app_ram_processor`
+```ruby
+require 'get_process_mem'
+
+module Prometheus
+  class AppRamProcessor < PrometheusExporterExt::PeriodicProcessor
+    self.type = 'app_ram'
+    self.logger = Rails.logger
+    self.default_frequency = 60
+
+    def collect
+      mem = GetProcessMem.new
+      [format_metric(usage_bytes: mem.bytes, labels: { pid: Process.pid })]
+    end
+  end
+end
+```
+`lib/prometheus/some_service_error_processor`
+```ruby
+module Prometheus
+  class SomeServiceErrorProcessor < PrometheusExporterExt::InlineProcessor
+    self.type = 'some_service_error'
+    self.logger = Rails.logger
+
+    def collect(error_name)
+      [
+        format_metric(error_count: 1),
+        format_metric(specific_error_count: 1, labels: { error_name: error_name })
+      ]
+    end
+  end
+end
+```
+
+2. Create prometheus initializer  
+`config/initializers/prometheus.rb`
+```ruby
+PrometheusExporterExt.configure do |config|
+  config.enabled = ENV['PROMETHEUS_ENABLED']
+  config.host = ENV['PROMETHEUS_HOST']
+  config.port = ENV['PROMETHEUS_PORT']
+  config.default_labels = { node_name: ENV['NODE_NAME'] }
+end
+
+if PrometheusExporterExt.enabled?
+  require 'prometheus_exporter/middleware'
+  require 'prometheus/some_service_error_processor'
+  
+  Rails.application.middleware.unshift PrometheusExporter::Middleware
+  # Here you can also register metrics for ActiveJob adapters like DelayedJob
+  # require 'prometheus_exporter/instrumentation/delayed_job'
+  # PrometheusExporter::Instrumentation::DelayedJob.register_plugin
+end
+```
+
+3. Configure puma master/workers to send metrics  
+`config/puma.rb`
+```ruby
+# ...
+before_fork do
+  # All periodic prometheus processors that needs to monitor web server should be started here.
+  if PrometheusExporterExt.enabled?
+    require 'prometheus_exporter/instrumentation'
+    require 'prometheus/app_online_processor'
+    require 'prometheus/app_ram_processor'
+
+    PrometheusExporter::Instrumentation::Puma.start
+    PrometheusExporter::Instrumentation::Process.start(type: 'puma_master')
+    Prometheus::AppOnlineProcessor.start
+    Prometheus::AppRamProcessor.start(labels: { type: 'puma_master' })
+    # add here your periodic processors that s 
+  end
+end
+
+on_worker_boot do
+  # All periodic prometheus processors that needs to monitor puma workers should be started here.
+  if PrometheusExporterExt.enabled?
+    require 'prometheus_exporter/instrumentation'
+    require 'prometheus/app_ram_processor'
+
+    PrometheusExporter::Instrumentation::Process.start(type: 'puma_worker')
+    Prometheus::AppRamProcessor.start(labels: { type: 'puma_worker' })
+  end
+end
+```
+
+in `SomeService wrote something like`
+```ruby
+class SomeService
+  def call
+    # ...
+  rescue StandardError => e
+    Rails.logger.error { "Error occurred in SomeService: #{e.class} #{e.message}" }
+    Prometheus::SomeServiceErrorProcessor.process(e.class.name)
+  end
+end
+```
+
+## How to configure and run prometheus exporter process
+
+1. create collectors that will receive data from our processors.  
+`lib/prometheus/app_online_collector`
+```ruby
+module Prometheus
+  class AppOnlineCollector < PrometheusExporterExt::ExpirationCollector
+    self.type = 'app_online'
+    self.max_metric_age = 70
+    
+    define_metric_gauge :online, 'application online status'
+  end
+end
+```
+
+`lib/prometheus/app_ram_collector`
+```ruby
+module Prometheus
+  class AppRamCollector < PrometheusExporterExt::ExpirationCollector
+    self.type = 'app_ram'
+    self.max_metric_age = 70
+    
+    define_metric_gauge :usage_bytes, 'application ram usage in bytes'
+  end
+end
+```
+
+`lib/prometheus/some_service_error_collector`
+```ruby
+module Prometheus
+  class SomeServiceErrorCollector < PrometheusExporterExt::BaseCollector
+    self.type = 'some_service_error'
+    
+    define_metric_counter :error_count, 'total errors count in SomeService'
+    define_metric_counter :specific_error_count, 'errors count in SomeService per error class'
+  end
+end
+```
+
+2. Create file that will load all custom collectors.  
+`lib/prometheus_collectors.rb`
+```ruby
+require_relative 'prometheus/app_online_collector'
+require_relative 'prometheus/app_ram_collector'
+require_relative 'prometheus/some_service_error_collector'
+# Place here require of collectors from 3rd party gems if you have them.
+# Collectors from prometheus_exporter will be loaded by default, so no need to require them here.
+```
+
+3. Run prometheus_exporter
+```shell
+$ bundle exec prometheus_exporter -a lib/prometheus_collectors.rb
 ```
 
 ## Development
