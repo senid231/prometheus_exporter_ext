@@ -12,6 +12,8 @@ module PrometheusExporterExt
   #   class MyProcessor < PrometheusExporterExt::PeriodicProcessor
   #     self.type = 'my'
   #     self.logger = Rails.logger
+  #     self.default_frequency = 60
+  #     self.default_labels = { foo: 'bar' }
   #
   #     # being run inside thread before loop starts.
   #     after_thread_start do
@@ -33,7 +35,8 @@ module PrometheusExporterExt
   #   MyProcessor.start(labels: { my_host: 'example.com' })
   class PeriodicProcessor < BaseProcessor
     class << self
-      attr_accessor :_after_thread_start
+      attr_accessor :default_frequency,
+                    :_after_thread_start
 
       # @yield
       def after_thread_start(&block)
@@ -45,15 +48,16 @@ module PrometheusExporterExt
       end
 
       # @param client [PrometheusExporter::Client,nil] default PrometheusExporter::Client.default
-      # @param frequency [Integer] default 30
+      # @param frequency [Integer] default class property default_frequency (default 30)
       # @param labels [Hash] default empty hash
-      def start(client: nil, frequency: 30, labels: {})
+      def start(client: nil, frequency: default_frequency, labels: {})
         raise ArgumentError, "#{name} already started" if running?
 
         client ||= PrometheusExporter::Client.default
-        process_collector = new(labels.dup)
 
         @thread = Thread.new do
+          process_collector = new(labels)
+
           within_log_tags(name) do
             run_after_thread_start
             logger&.info { "Start #{name}" }
@@ -95,6 +99,7 @@ module PrometheusExporterExt
 
       def inherited(subclass)
         super
+        subclass.default_frequency = default_frequency || 30
         subclass._after_thread_start = _after_thread_start&.dup || []
       end
     end

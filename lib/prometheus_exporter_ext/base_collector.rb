@@ -4,7 +4,6 @@ require 'prometheus_exporter/metric'
 require 'prometheus_exporter/server/type_collector'
 
 module PrometheusExporterExt
-
   # Collector that caches all received data forever.
   # @example
   #   class MyCollector < PrometheusExporterExt::BaseCollector
@@ -82,6 +81,7 @@ module PrometheusExporterExt
 
     def initialize
       @observers = build_observers
+      super
     end
 
     # @return [Array<PrometheusExporter::Metric::Base>]

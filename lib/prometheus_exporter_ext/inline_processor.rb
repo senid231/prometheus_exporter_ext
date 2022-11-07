@@ -9,6 +9,7 @@ module PrometheusExporterExt
   #   class MyProcessor < PrometheusExporterExt::InlineProcessor
   #     self.type = 'my'
   #     self.logger = Rails.logger
+  #     self.default_labels = { foo: 'bar' }
   #
   #     def collect(data)
   #       [

@@ -69,6 +69,8 @@ require 'prometheus_exporter_ext/inline_processor'
 class MyProcessor < PrometheusExporterExt::InlineProcessor
   self.type = 'my' # required
   self.logger = Rails.logger # can be omitted
+  # change default_labels when you need same labels for all calls of this processor
+  self.default_labels = { a: 'b' } # can be omitted, default empty hash
 
   # you can add on_exception callback to send events into error notifications system 
   on_exception do |error|
@@ -89,12 +91,12 @@ end
 data = MyApi.get_my_data # => { total_count: 123, node_name: 'example' }
 # below command will send metrics to the prometheus exporter via PrometheusExporter::Client.default
 # Collector will receive: 
-# { 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 'labels' => { 'my_node' => 'example' } }
+# { 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 'labels' => { 'a' => 'b', 'my_node' => 'example' } }
 MyProcessor.process(data)
 # You can provide additional labels that will be added only to this data.
 # Collector will receive: 
 # { 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 
-#   'labels' => { 'my_node' => 'example', 'my_host' => 'example.com' } }
+#   'labels' => { 'a' => 'b', 'my_node' => 'example', 'my_host' => 'example.com' } }
 MyProcessor.process(data, labels: { my_host: 'example.com' })
 # Also you can override client
 MyProcessor.process(data, client: MyPrometheusClient.instance)
@@ -111,6 +113,10 @@ require 'prometheus_exporter_ext/periodic_processor'
 class MyProcessor < PrometheusExporterExt::PeriodicProcessor
   self.type = 'my' # required
   self.logger = Rails.logger # can be omitted
+  # change default_frequency when you need different interval for all instances of this processor
+  self.default_frequency = 60 # can be omitted, default 30
+  # change default_labels when you need same labels for all instances of this processor
+  self.default_labels = { a: 'b' } # can be omitted, default empty hash
 
   # you can add on_exception callback to send events into error notifications system.
   after_thread_start do
@@ -136,15 +142,16 @@ class MyProcessor < PrometheusExporterExt::PeriodicProcessor
   end
 end
 
-# Collector will receive following each 30 seconds: 
-# { 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 'labels' => { 'my_node' => 'example' } }
+# Collector will receive following each `MyProcessor.default_frequency` seconds: 
+# { 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 'labels' => { 'a' => 'b', 'my_node' => 'example' } }
 MyProcessor.start
-# You can change send interval for the processor
+# You can change send frequency for the processor if you need it different in different processes,
+# but most common approach is to change `MyProcessor.default_frequency` instead.
 MyProcessor.start(frequency: 60)
 # Also you can provide additional labels that will be send with all metrics data.
 # Collector will receive: 
 # { 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 
-#   'labels' => { 'my_node' => 'example', 'my_host' => 'example.com' } }
+#   'labels' => { 'a' => 'b', 'my_node' => 'example', 'my_host' => 'example.com' } }
 MyProcessor.start(labels: { my_host: 'example.com' })
 ```
 
@@ -156,6 +163,8 @@ require 'prometheus_exporter_ext/base_processor'
 
 class MyProcessor < PrometheusExporterExt::BaseProcessor
   self.type = 'my'
+  # change default_labels when you need same labels for all instances of this processor
+  self.default_labels = { a: 'b' } # can be omitted, default empty hash
   
   def collect
     data = MyApi.get_my_data # => { total_count: 123, node_name: 'example' }
@@ -169,9 +178,14 @@ class MyProcessor < PrometheusExporterExt::BaseProcessor
   end
 end
 
-# [{ 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 'labels' => { 'my_node' => 'example' } }]
+# Gather metrics data by calling #collect method
+# [{ 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1, 'labels' => { 'a' => 'b', 'my_node' => 'example' } }]
 metrics_data = MyProcessor.new.collect
-# You can send metrics data like this:
+# Also you can pass additional labels to the collector
+# [{ 'type': 'my', 'my_gauge' => 123, 'my_counter' => 1,
+#    'labels' => { 'a' => 'b', 'baz' => 'boo', 'my_node' => 'example' } }]
+metrics_data = MyProcessor.new(baz: 'boo').collect
+# And send metrics data like this:
 metrics_data.each do |metric|
   PrometheusExporter::Client.default.send_json(metric)
 end

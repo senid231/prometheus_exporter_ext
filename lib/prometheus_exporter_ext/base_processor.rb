@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 module PrometheusExporterExt
-
   # Base processor class.
   # Use it when ancestors are not flexible enough for your needs.
   # @example
   #   class MyProcessor < PrometheusExporterExt::BaseProcessor
   #     self.type = 'my'
   #     self.logger = Rails.logger
+  #     self.default_labels = { foo: 'bar' }
   #
   #     def collect
   #       data = MyApi.get_my_data
@@ -26,7 +26,10 @@ module PrometheusExporterExt
   #   end
   class BaseProcessor
     class << self
-      attr_accessor :logger, :type, :_on_exception
+      attr_accessor :logger,
+                    :type,
+                    :_on_exception,
+                    :default_labels
 
       # @yield
       # @yieldparam exception [Exception]
@@ -45,12 +48,13 @@ module PrometheusExporterExt
         super
         subclass.type = nil
         subclass._on_exception = _on_exception&.dup || []
+        subclass.default_labels = default_labels&.dup || {}
       end
     end
 
     # @param labels [Hash] default empty hash
     def initialize(labels = {})
-      @metric_labels = labels || {}
+      @metric_labels = default_labels.merge(labels || {})
     end
 
     # @return [Array<Hash>] array of object returned by #format_metric
