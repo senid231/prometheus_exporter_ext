@@ -10,7 +10,7 @@ module PrometheusExporterExt
     alias enabled? enabled
 
     def initialize
-      @enabled = false
+      @enabled = true
       @host = PrometheusExporter::DEFAULT_BIND_ADDRESS
       @port = PrometheusExporter::DEFAULT_PORT
       @default_labels = {}

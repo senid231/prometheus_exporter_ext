@@ -33,8 +33,10 @@ module PrometheusExporterExt
       end
     end
 
+    abstract_class
+
     def initialize
-      raise ArgumentError, 'max_metric_age must be an integer' unless max_metric_age.is_a?(Integer)
+      raise ArgumentError, 'max_metric_age must be an integer' if !abstract? && !max_metric_age.is_a?(Integer)
 
       @data = []
       super
@@ -48,7 +50,7 @@ module PrometheusExporterExt
       changed_observers = {}
 
       @data.each do |obj|
-        changed_observers.merge observe_object(obj)
+        changed_observers.merge! observe_object(obj)
       end
 
       changed_observers.values

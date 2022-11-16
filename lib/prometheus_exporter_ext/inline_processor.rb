@@ -37,7 +37,7 @@ module PrometheusExporterExt
         rescue StandardError => e
           warn "#{self.class} Failed To Collect Stats #{e.class} #{e.message}"
           logger&.error { "#{e.class} #{e.message} #{e.backtrace&.join("\n")}" }
-          processor.handle_exception(e)
+          handle_exception(e)
         end
       end
     end

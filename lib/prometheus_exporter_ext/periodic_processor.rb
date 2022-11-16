@@ -54,19 +54,19 @@ module PrometheusExporterExt
         client ||= PrometheusExporter::Client.default
 
         @thread = Thread.new do
-          process_collector = new(labels)
+          processor = new(labels)
 
           within_log_tags(name) do
             run_after_thread_start
             logger&.info { "Start #{name}" }
             loop do
               begin
-                metrics = process_collector.collect
+                metrics = processor.collect
                 metrics.each { |metric| client.send_json(metric) }
               rescue StandardError => e
                 warn "#{self.class} Failed To Collect Stats #{e.class} #{e.message}"
                 logger&.error { "#{e.class} #{e.message} #{e.backtrace&.join("\n")}" }
-                process_collector.handle_exception(e)
+                handle_exception(e)
               end
               sleep frequency
             end
