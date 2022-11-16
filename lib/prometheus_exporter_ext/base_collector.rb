@@ -18,7 +18,7 @@ module PrometheusExporterExt
   #  end
   class BaseCollector < PrometheusExporter::Server::TypeCollector
     class << self
-      attr_accessor :type, :_metrics
+      attr_accessor :type, :_metrics, :_abstract
 
       # Defines counter metric.
       # @param name [Symbol,String]
@@ -67,7 +67,11 @@ module PrometheusExporterExt
         name = name.to_sym
         raise ArgumentError, "metric #{name} already defined" if _metrics.key?(name)
 
-        _metrics[name] = { metric_class: metric_class.to_s, help: help, args: args }
+        _metrics[name] = { metric_class: metric_class, help: help, args: args }
+      end
+
+      def abstract_class
+        self._abstract = true
       end
 
       private
@@ -75,9 +79,13 @@ module PrometheusExporterExt
       def inherited(subclass)
         super
         subclass.type = nil
-        subclass._metrics = _metrics&.dup || {}
+        subclass._metrics = _metrics.dup || {}
+        subclass._abstract = false
       end
     end
+
+    self._metrics = {}
+    abstract_class
 
     def initialize
       @observers = build_observers
@@ -135,10 +143,13 @@ module PrometheusExporterExt
 
     # @return [Hash<Symbol,PrometheusExporter::Metric::Base>]
     def build_observers
-      self.class._metrics.each_with_object({}) do |store, (name, opts)|
+      self.class._metrics.each_with_object({}) do |(name, opts), store|
         store[name] = opts[:metric_class].new("#{type}_#{name}", opts[:help], *opts[:args])
-        store
       end
+    end
+
+    def abstract?
+      self.class._abstract
     end
   end
 end

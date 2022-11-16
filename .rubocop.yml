@@ -74,3 +74,22 @@ Layout/ClosingParenthesisIndentation:
 Layout/ArgumentAlignment:
   Enabled: false
 
+Lint/AmbiguousBlockAssociation:
+  Enabled: true
+  AllowedMethods: [change, not_change]
+
+RSpec/NamedSubject:
+  Enabled: false
+
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/ExampleLength:
+  Enabled: false
+
+RSpec/NestedGroups:
+  Enabled: false
+
+RSpec/ExpectChange:
+  Enabled: true
+  EnforcedStyle: block

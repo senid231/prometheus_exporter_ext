@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'prometheus_exporter'
+require 'prometheus_exporter/client'
 require_relative 'prometheus_exporter_ext/version'
 require_relative 'prometheus_exporter_ext/configuration'
 require_relative 'prometheus_exporter_ext/base_processor'

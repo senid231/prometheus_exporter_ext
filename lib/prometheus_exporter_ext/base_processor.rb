@@ -55,7 +55,7 @@ module PrometheusExporterExt
 
     # @param labels [Hash] default empty hash
     def initialize(labels = {})
-      @metric_labels = default_labels.merge(labels || {})
+      @metric_labels = self.class.default_labels.merge(labels || {})
     end
 
     # @return [Array<Hash>] array of object returned by #format_metric
