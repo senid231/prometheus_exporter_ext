@@ -9,7 +9,6 @@ module PrometheusExporterExt
   # @example
   #   class MyProcessor < PrometheusExporterExt::PeriodicProcessor
   #     self.type = 'my'
-  #     self.logger = Rails.logger
   #     self.default_frequency = 60
   #     self.default_labels = { foo: 'bar' }
   #

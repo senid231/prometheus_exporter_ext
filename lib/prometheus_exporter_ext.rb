@@ -16,6 +16,20 @@ module PrometheusExporterExt
   end
 
   # Configure on client side
+  # @example
+  #   PrometheusExporterExt.configure do |config|
+  #     config.logger = Rails.logger
+  #     config.enabled = Rails.configuration.my_config[:enabled]
+  #     config.host = Rails.configuration.my_config[:host]
+  #     config.port = Rails.configuration.my_config[:port]
+  #     config.default_labels = Rails.configuration.my_config[:default_labels] || {}
+  #     config.on_exception do |error, processor_class|
+  #       Sentry.capture_exception(
+  #         error,
+  #         tags: { component: 'Prometheus', processor_class: processor_class.to_s }
+  #       )
+  #     end
+  #   end
   def configure
     yield config
 

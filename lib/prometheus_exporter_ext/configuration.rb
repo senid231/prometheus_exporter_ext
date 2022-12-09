@@ -2,7 +2,8 @@
 
 module PrometheusExporterExt
   class Configuration
-    attr_accessor :enabled,
+    attr_accessor :logger,
+                  :enabled,
                   :host,
                   :port,
                   :default_labels
@@ -10,6 +11,7 @@ module PrometheusExporterExt
     alias enabled? enabled
 
     def initialize
+      @logger = nil
       @enabled = true
       @host = PrometheusExporter::DEFAULT_BIND_ADDRESS
       @port = PrometheusExporter::DEFAULT_PORT
