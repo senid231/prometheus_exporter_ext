@@ -53,6 +53,7 @@ To gather metrics for your need we have several built-in collectors and processo
 
 ```ruby
 PrometheusExporterExt.configure do |config|
+  config.logger = Rails.logger
   config.enabled = ENV['PROMETHEUS_ENABLED']
   config.host = ENV['PROMETHEUS_HOST']
   config.port = ENV['PROMETHEUS_PORT']
@@ -88,7 +89,6 @@ require 'prometheus_exporter_ext/inline_processor'
 
 class MyProcessor < PrometheusExporterExt::InlineProcessor
   self.type = 'my' # required
-  self.logger = Rails.logger # can be omitted
   # change default_labels when you need same labels for all calls of this processor
   self.default_labels = { a: 'b' } # can be omitted, default empty hash
 
@@ -132,7 +132,6 @@ require 'prometheus_exporter_ext/periodic_processor'
 
 class MyProcessor < PrometheusExporterExt::PeriodicProcessor
   self.type = 'my' # required
-  self.logger = Rails.logger # can be omitted
   # change default_frequency when you need different interval for all instances of this processor
   self.default_frequency = 60 # can be omitted, default 30
   # change default_labels when you need same labels for all instances of this processor
@@ -296,7 +295,6 @@ every exception there should increment counter in `SomeServiceErrorProcessor`
 module Prometheus
   class AppOnlineProcessor < PrometheusExporterExt::PeriodicProcessor
     self.type = 'app_online'
-    self.logger = Rails.logger
     self.default_frequency = 60
 
     def collect
@@ -312,7 +310,6 @@ require 'get_process_mem'
 module Prometheus
   class AppRamProcessor < PrometheusExporterExt::PeriodicProcessor
     self.type = 'app_ram'
-    self.logger = Rails.logger
     self.default_frequency = 60
 
     def collect
@@ -327,7 +324,6 @@ end
 module Prometheus
   class SomeServiceErrorProcessor < PrometheusExporterExt::InlineProcessor
     self.type = 'some_service_error'
-    self.logger = Rails.logger
 
     def collect(error_name)
       [
