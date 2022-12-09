@@ -12,7 +12,7 @@ Install the gem and add to the application's Gemfile by executing:
 Or add directly to the Gemfile
 
 ```ruby
-gem 'prometheus_exporter_ext', `~> 0.1`, require: false
+gem 'prometheus_exporter_ext', '~> 0.1', require: false
 ```
 
 If bundler is not being used to manage dependencies, install the gem by executing:
