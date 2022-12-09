@@ -6,7 +6,6 @@ module PrometheusExporterExt
   # @example
   #   class MyProcessor < PrometheusExporterExt::BaseProcessor
   #     self.type = 'my'
-  #     self.logger = Rails.logger
   #     self.default_labels = { foo: 'bar' }
   #
   #     def collect
@@ -26,8 +25,7 @@ module PrometheusExporterExt
   #   end
   class BaseProcessor
     class << self
-      attr_accessor :logger,
-                    :type,
+      attr_accessor :type,
                     :_on_exception,
                     :default_labels
 
@@ -41,6 +39,10 @@ module PrometheusExporterExt
       def handle_exception(exception)
         _on_exception.each { |cb| cb.call(exception) }
         PrometheusExporterExt.config.handle_exception(exception, self)
+      end
+
+      def logger
+        PrometheusExporterExt.config.logger
       end
 
       private

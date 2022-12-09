@@ -23,6 +23,7 @@ module PrometheusExporterExt
       # Defines counter metric.
       # @param name [Symbol,String]
       # @param help [String]
+      # @raise [ArgumentError]
       # @example
       #   define_metric_counter :test, 'test metric'
       def define_metric_counter(name, help)
@@ -32,6 +33,7 @@ module PrometheusExporterExt
       # Defines gauge metric.
       # @param name [Symbol,String]
       # @param help [String]
+      # @raise [ArgumentError]
       # @example
       #   define_metric_gauge :test, 'test metric'
       def define_metric_gauge(name, help)
@@ -42,6 +44,7 @@ module PrometheusExporterExt
       # @param name [Symbol,String]
       # @param help [String]
       # @param opts [Hash] default empty hash
+      # @raise [ArgumentError]
       # @example
       #   define_metric_histogram :test, 'test metric', buckets: [0.01, 0.1, 0.5, 1, 10.0]
       def define_metric_histogram(name, help, opts = {})
@@ -52,6 +55,7 @@ module PrometheusExporterExt
       # @param name [Symbol,String]
       # @param help [String]
       # @param opts [Hash] default empty hash
+      # @raise [ArgumentError]
       # @example
       #   define_metric_summary :test, 'test metric', quantiles: [0.99, 0.9, 0.5, 0.1, 0.01]
       def define_metric_summary(name, help, opts = {})
@@ -63,11 +67,20 @@ module PrometheusExporterExt
       # @param name [Symbol,String]
       # @param help [String]
       # @param args [Array] default empty array
+      # @raise [ArgumentError]
       def define_metric(metric_class, name, help, args: [])
         name = name.to_sym
         raise ArgumentError, "metric #{name} already defined" if _metrics.key?(name)
 
         _metrics[name] = { metric_class: metric_class, help: help, args: args }
+      end
+
+      # @param name [Symbol,String]
+      def remove_metric(name)
+        name = name.to_sym
+        raise ArgumentError, "metric #{name} is not defined" unless _metrics.key?(name)
+
+        _metrics.delete(name)
       end
 
       def abstract_class
